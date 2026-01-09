@@ -10,28 +10,34 @@ data class ApiInfo(
     val methodName: String,
     
     /** HTTP 请求方法 (GET, POST, PUT, DELETE 等) */
-    val httpMethod: String,
+    val method: String,
     
     /** 接口请求路径 */
-    val path: String,
+    val uri: String,
     
-    /** 请求头信息列表 */
-    val headers: List<HeaderInfo> = emptyList(),
+    /** 请求头信息列表 (JSON 字符串) */
+    val reqHeader: String? = null,
     
-    /** 响应参数 (支持多层级结构) */
-    val responseParams: SchemaNode? = null,
+    /** 响应参数 (JSON 字符串) */
+    val resBody: String? = null,
     
     /** 类（Controller文件）的注释说明 */
-    val classComment: String? = null,
+    val catName: String? = null,
+
+    /** 类（Controller文件）名 */
+    val catClassName: String? = null,
     
     /** 方法（接口）的注释说明 */
-    val methodComment: String? = null,
+    val name: String? = null,
     
-    /** URL 路径请求参数列表 (Query Parameters) */
-    val queryParams: List<QueryParamInfo> = emptyList(),
+    /** URL 路径请求参数列表 (JSON 字符串) */
+    val reqParams: String? = null,
     
-    /** 请求体结构 (Body, 支持多层级结构) */
-    val requestBody: SchemaNode? = null
+    /** 请求体结构 (JSON 字符串) */
+    val reqBody: String? = null,
+
+    /** 描述 */
+    val description: String? = null
 )
 
 /**

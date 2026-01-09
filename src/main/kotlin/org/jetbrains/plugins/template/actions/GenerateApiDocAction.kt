@@ -55,6 +55,7 @@ class GenerateApiDocAction : AnAction() {
         for (psiClass in classes) {
             val classLevelPath = getPathFromAnnotation(psiClass)
             val classComment = psiClass.docComment?.let { parseDocComment(it) }
+            val className = psiClass.name
             
             for (method in psiClass.methods) {
                 if (isApiMethod(method)) {
@@ -79,19 +80,19 @@ class GenerateApiDocAction : AnAction() {
                     
                     apiList.add(ApiInfo(
                         methodName = method.name,
-                        httpMethod = httpMethod,
-                        path = fullPath,
-                        headers = headers,
-                        classComment = classComment,
-                        methodComment = method.docComment?.let { parseDocComment(it) },
-                        queryParams = queryParams,
-                        requestBody = requestBody,
-                        responseParams = responseParams
+                        method = httpMethod,
+                        uri = fullPath,
+                        reqHeader = gson.toJson(headers),
+                        catName = classComment,
+                        catClassName = className,
+                        name = method.docComment?.let { parseDocComment(it) },
+                        reqParams = gson.toJson(queryParams),
+                        reqBody = requestBody?.let { gson.toJson(it) },
+                        resBody = responseParams?.let { gson.toJson(it) }
                     ))
                 }
             }
         }
-        println(gson.toJson(apiList))
     }
 
     private fun isApiMethod(method: PsiMethod): Boolean {

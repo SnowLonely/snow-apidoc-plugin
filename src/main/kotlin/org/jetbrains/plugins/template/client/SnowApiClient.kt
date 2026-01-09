@@ -36,25 +36,12 @@ class SnowApiClient {
         if (baseUrl.isBlank()) {
             return "错误: 请先在设置中配置 Snow-ApiDoc 服务端地址"
         }
-
-        // ==========================================
-        // 【自定义请求数据格式】
-        // 已适配 Snow-ApiDoc 后端所需格式：
-        // headers: List<HeaderInfo>
-        // queryParams: List<QueryParamInfo>
-        // requestBody/responseParams: SchemaNode (Recursive)
-        // ==========================================
-        val requestData = mapOf(
-            "token" to token,
-            "timestamp" to System.currentTimeMillis(),
-            "data" to apiList
-        )
         
         val targetUrl = "$baseUrl/tool/api/interface"
         
         try {
             // 将对象序列化为 JSON 字符串
-            val jsonBody = gson.toJson(requestData)
+            val jsonBody = gson.toJson(apiList)
             
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(targetUrl))
