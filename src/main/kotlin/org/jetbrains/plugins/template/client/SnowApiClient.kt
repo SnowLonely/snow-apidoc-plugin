@@ -38,21 +38,30 @@ class SnowApiClient {
         }
 
         // ==========================================
-        // 【注意】这里是发送请求的核心位置，您可以根据需要修改：
-        // 1. 请求路径 (目前是 /api/save)
-        // 2. 请求头 (目前添加了 Token)
-        // 3. 请求体格式 (目前是直接序列化 apiList)
+        // 【自定义请求数据格式】
+        // 已适配 Snow-ApiDoc 后端所需格式：
+        // headers: List<HeaderInfo>
+        // queryParams: List<QueryParamInfo>
+        // requestBody/responseParams: SchemaNode (Recursive)
         // ==========================================
+        val requestData = mapOf(
+            "token" to token,
+            "timestamp" to System.currentTimeMillis(),
+            "data" to apiList
+        )
         
         val targetUrl = "$baseUrl/tool/api/interface"
         
         try {
-            val jsonBody = gson.toJson(apiList)
+            // 将对象序列化为 JSON 字符串
+            val jsonBody = gson.toJson(requestData)
             
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(targetUrl))
+                // 设置请求头为 JSON 格式
                 .header("Content-Type", "application/json")
-                .header("X-Project-Token", token) // 这里可以自定义您的鉴权头
+                .header("X-Project-Token", token) 
+                // 使用 POST 方法发送 JSON Body
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build()
 
