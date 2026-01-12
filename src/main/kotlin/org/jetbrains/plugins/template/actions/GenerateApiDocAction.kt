@@ -16,6 +16,10 @@ class GenerateApiDocAction : AnAction() {
     private val snowApiClient = SnowApiClient()
     private val gson = Gson()
 
+    companion object {
+        private const val SPRING_DEFAULT_NONE = "\n\t\t\n\t\t\n\uE000\uE001\uE002\n\t\t\t\t\n"
+    }
+
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val virtualFiles = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY) ?: return
@@ -93,6 +97,7 @@ class GenerateApiDocAction : AnAction() {
                 }
             }
         }
+        println(gson.toJson(apiList))
     }
 
     private fun isApiMethod(method: PsiMethod): Boolean {
@@ -161,11 +166,11 @@ class GenerateApiDocAction : AnAction() {
             param.annotations.forEach { ann ->
                 if (ann.qualifiedName?.endsWith("RequestHeader") == true) {
                     val valueAttr = ann.findAttributeValue("value") ?: ann.findAttributeValue("name")
-                    val headerName = valueAttr?.text?.replace("\"", "") ?: param.name
+                    val headerName = getAttributeStringValue(valueAttr) ?: param.name
                     val requiredAttr = ann.findAttributeValue("required")
                     val required = if (requiredAttr?.text == "false") "0" else "1"
                     val defaultValueAttr = ann.findAttributeValue("defaultValue")
-                    val example = defaultValueAttr?.text?.replace("\"", "") ?: ""
+                    val example = getAttributeStringValue(defaultValueAttr) ?: ""
                     
                     headers.add(HeaderInfo(
                         name = headerName,
@@ -203,15 +208,14 @@ class GenerateApiDocAction : AnAction() {
             }
 
             val ann = param.getAnnotation("org.springframework.web.bind.annotation.RequestParam")
-            val name = ann?.findAttributeValue("value")?.text?.replace("\"", "")
-                ?: ann?.findAttributeValue("name")?.text?.replace("\"", "")
-                ?: param.name
+            val valueAttr = ann?.findAttributeValue("value") ?: ann?.findAttributeValue("name")
+            val name = getAttributeStringValue(valueAttr) ?: param.name
             
             val requiredAttr = ann?.findAttributeValue("required")
             val required = if (requiredAttr?.text == "false") "0" else "1"
             
             val defaultValueAttr = ann?.findAttributeValue("defaultValue")
-            val example = defaultValueAttr?.text?.replace("\"", "") ?: ""
+            val example = getAttributeStringValue(defaultValueAttr) ?: ""
 
             queryParams.add(QueryParamInfo(
                 name = name,
@@ -221,6 +225,14 @@ class GenerateApiDocAction : AnAction() {
             ))
         }
         return queryParams
+    }
+
+    private fun getAttributeStringValue(value: PsiAnnotationMemberValue?): String? {
+        if (value == null) return null
+        val constantValue = JavaPsiFacade.getInstance(value.project).constantEvaluationHelper.computeConstantExpression(value)
+        val stringValue = constantValue?.toString() ?: value.text.replace("\"", "")
+        
+        return if (stringValue == SPRING_DEFAULT_NONE) "" else stringValue
     }
 
     private fun getRequestBodySchema(method: PsiMethod, processedTypes: MutableSet<String>): SchemaNode? {
@@ -239,16 +251,18 @@ class GenerateApiDocAction : AnAction() {
             
             // 数组或集合
             psiType is PsiArrayType -> {
-                SchemaNode(type = "array", items = parseTypeToSchema(psiType.componentType, processedTypes))
+                SchemaNode(type = "array", items = parseTypeToSchema(psiType.componentType, processedTypes.toMutableSet()))
             }
             isCollection(psiType) -> {
                 val iterableType = com.intellij.psi.util.PsiUtil.extractIterableTypeParameter(psiType, false)
-                SchemaNode(type = "array", items = iterableType?.let { parseTypeToSchema(it, processedTypes) } ?: SchemaNode(type = "object"))
+                SchemaNode(type = "array", items = iterableType?.let { parseTypeToSchema(it, processedTypes.toMutableSet()) } ?: SchemaNode(type = "object"))
             }
             
             // 对象类型 (递归解析)
             psiType is PsiClassType -> {
-                val psiClass = psiType.resolve()
+                val resolveResult = psiType.resolveGenerics()
+                val psiClass = resolveResult.element
+                val substitutor = resolveResult.substitutor
                 val qualifiedName = psiClass?.qualifiedName
                 
                 if (psiClass != null && qualifiedName != null && !qualifiedName.startsWith("java.lang")) {
@@ -261,7 +275,9 @@ class GenerateApiDocAction : AnAction() {
                     val properties = mutableMapOf<String, SchemaNode>()
                     psiClass.allFields.forEach { field ->
                         if (!field.hasModifierProperty(PsiModifier.STATIC)) {
-                            var fieldSchema = parseTypeToSchema(field.type, processedTypes)
+                            // 使用 substitutor 替换泛型类型
+                            val resolvedFieldType = substitutor.substitute(field.type) ?: field.type
+                            var fieldSchema = parseTypeToSchema(resolvedFieldType, processedTypes.toMutableSet())
                             
                             // 提取字段注释作为 description
                             val description = field.docComment?.let { parseDocComment(it) }
@@ -285,16 +301,17 @@ class GenerateApiDocAction : AnAction() {
     }
 
     private fun isPrimitive(psiType: PsiType): Boolean {
-        val text = psiType.presentableText.lowercase()
-        return text in listOf("string", "int", "integer", "long", "boolean", "double", "float", "void") || psiType is PsiPrimitiveType
+        val text = psiType.presentableText.lowercase().removeSuffix("[]")
+        val primitives = listOf("string", "int", "integer", "long", "boolean", "double", "float", "void", "byte", "short", "char")
+        return text in primitives || psiType is PsiPrimitiveType
     }
 
     private fun mapPrimitiveType(psiType: PsiType): String {
-        val text = psiType.presentableText.lowercase()
+        val text = psiType.presentableText.lowercase().removeSuffix("[]")
         return when {
-            text.contains("int") || text.contains("long") -> "integer"
-            text.contains("boolean") -> "boolean"
-            text.contains("double") || text.contains("float") -> "number"
+            text == "int" || text == "integer" || text == "long" || text == "byte" || text == "short" -> "integer"
+            text == "boolean" -> "boolean"
+            text == "double" || text == "float" -> "number"
             else -> "string"
         }
     }
